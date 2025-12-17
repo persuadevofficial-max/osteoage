@@ -283,7 +283,7 @@ export default function DoctorDashboard() {
           <div className="text-sm mb-2" style={{ color: COLORS.textMuted }}>{patient.measureDate}</div>
           <div className="aspect-square rounded-lg flex flex-col items-center justify-center relative overflow-hidden" style={{ backgroundColor: "#0a0a1a" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/xraysample.jpeg" alt="X-ray" className="w-full h-full object-contain" />
+            <img src={`${process.env.NODE_ENV === 'production' ? '/osteoage' : ''}/xraysample.jpeg`} alt="X-ray" className="w-full h-full object-contain" />
             <div className="absolute bottom-4 left-4 text-xs" style={{ color: COLORS.textMuted }}>{patient.measureDate}</div>
           </div>
           <div className="mt-4 flex justify-between items-center">
