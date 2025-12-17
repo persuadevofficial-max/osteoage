@@ -83,37 +83,136 @@ function InteractiveSlider({ label, value, onChange, min = 100, max = 200, perce
 }
 
 function GrowthChart({ currentAge, currentHeight, boneAge, predictedHeight }: { currentAge: number; currentHeight: number; boneAge: number; predictedHeight: number }) {
+  // Chart dimensions
+  const padding = { top: 20, right: 20, bottom: 40, left: 45 };
+  const width = 500;
+  const height = 340;
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+
+  // Scales
+  const minAge = 0, maxAge = 19;
+  const minHeight = 40, maxHeight = 220;
+  const toX = (age: number) => padding.left + (age / maxAge) * chartWidth;
+  const toY = (h: number) => padding.top + chartHeight - ((h - minHeight) / (maxHeight - minHeight)) * chartHeight;
+
+  // Generate smooth percentile curves with more points
   const generateCurve = (percentile: number) => {
     const points = [];
-    for (let age = 0; age <= 19; age++) {
-      let height;
-      if (age <= 2) height = 50 + age * 12 + percentile * 0.1;
-      else if (age <= 10) height = 74 + (age - 2) * 6 + percentile * 0.15;
-      else height = 122 + (age - 10) * 5.5 + percentile * 0.2;
-      points.push({ age, height: Math.min(height, 220) });
+    for (let age = 0; age <= 19; age += 0.5) {
+      let h;
+      if (age <= 2) h = 50 + age * 12 + percentile * 0.08;
+      else if (age <= 10) h = 74 + (age - 2) * 5.8 + percentile * 0.12;
+      else if (age <= 14) h = 120 + (age - 10) * 6.5 + percentile * 0.18;
+      else h = 146 + (age - 14) * 3.5 + percentile * 0.22;
+      points.push({ age, height: Math.min(h, 210) });
     }
     return points;
   };
-  const p3 = generateCurve(3), p50 = generateCurve(50), p97 = generateCurve(97);
-  const toX = (age: number) => 50 + (age / 19) * 280;
-  const toY = (height: number) => 280 - ((height - 40) / 180) * 250;
-  const createPath = (points: { age: number; height: number }[]) => points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(p.age)} ${toY(p.height)}`).join(' ');
+
+  const p3 = generateCurve(3);
+  const p50 = generateCurve(50);
+  const p97 = generateCurve(97);
+
+  // Create smooth path using cubic bezier
+  const createSmoothPath = (points: { age: number; height: number }[]) => {
+    if (points.length < 2) return '';
+    let path = `M ${toX(points[0].age)} ${toY(points[0].height)}`;
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const cpX = (toX(prev.age) + toX(curr.age)) / 2;
+      path += ` Q ${cpX} ${toY(prev.height)} ${toX(curr.age)} ${toY(curr.height)}`;
+    }
+    return path;
+  };
+
+  // Historical growth data (mock)
+  const historyData = [
+    { age: 3, height: 95 },
+    { age: 4, height: 103 },
+    { age: 5, height: 110 },
+    { age: 6, height: 117 },
+    { age: 7, height: 123 },
+    { age: 8, height: 128 },
+    { age: currentAge, height: currentHeight },
+  ];
+
+  // Grid lines
+  const heightTicks = [40, 60, 80, 100, 120, 140, 160, 180, 200, 220];
+  const ageTicks = [0, 5, 10, 15, 19];
+  const fineHeightTicks = Array.from({ length: 19 }, (_, i) => 40 + i * 10);
+  const fineAgeTicks = Array.from({ length: 20 }, (_, i) => i);
 
   return (
     <div className="relative w-full h-full">
-      <svg viewBox="0 0 350 320" className="w-full h-full">
-        {[40, 80, 120, 160, 200, 220].map((h) => (<g key={h}><line x1="50" y1={toY(h)} x2="330" y2={toY(h)} stroke={COLORS.border} strokeWidth="0.5" /><text x="45" y={toY(h) + 4} fill={COLORS.textMuted} fontSize="10" textAnchor="end">{h}</text></g>))}
-        {[0, 5, 10, 15, 19].map((a) => (<g key={a}><line x1={toX(a)} y1="30" x2={toX(a)} y2="280" stroke={COLORS.border} strokeWidth="0.5" /><text x={toX(a)} y="295" fill={COLORS.textMuted} fontSize="10" textAnchor="middle">{a}</text></g>))}
-        <text x="20" y="155" fill={COLORS.textMuted} fontSize="10" transform="rotate(-90, 20, 155)">키 (cm)</text>
-        <text x="190" y="315" fill={COLORS.textMuted} fontSize="10" textAnchor="middle">나이</text>
-        <path d={`${createPath(p3)} L ${toX(19)} ${toY(p97[19].height)} ${p97.slice().reverse().map((p, i) => `L ${toX(19 - i)} ${toY(p.height)}`).join(' ')} Z`} fill={COLORS.accentGreen} fillOpacity="0.1" />
-        <path d={createPath(p3)} fill="none" stroke={COLORS.textMuted} strokeWidth="1" strokeDasharray="4,4" />
-        <path d={createPath(p50)} fill="none" stroke={COLORS.accentYellow} strokeWidth="2" />
-        <path d={createPath(p97)} fill="none" stroke={COLORS.textMuted} strokeWidth="1" strokeDasharray="4,4" />
-        <circle cx={toX(currentAge)} cy={toY(currentHeight)} r="6" fill={COLORS.accent} />
-        <circle cx={toX(boneAge)} cy={toY(currentHeight)} r="4" fill={COLORS.accentOrange} />
-        <circle cx={toX(18)} cy={toY(predictedHeight)} r="6" fill={COLORS.accentGreen} />
-        <line x1={toX(currentAge)} y1={toY(currentHeight)} x2={toX(18)} y2={toY(predictedHeight)} stroke={COLORS.accent} strokeWidth="1" strokeDasharray="4,4" />
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="bandGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.05" />
+          </linearGradient>
+        </defs>
+
+        {/* Fine grid */}
+        {fineHeightTicks.map((h) => (
+          <line key={`hf-${h}`} x1={padding.left} y1={toY(h)} x2={width - padding.right} y2={toY(h)} stroke={COLORS.border} strokeWidth="0.3" strokeOpacity="0.5" />
+        ))}
+        {fineAgeTicks.map((a) => (
+          <line key={`af-${a}`} x1={toX(a)} y1={padding.top} x2={toX(a)} y2={height - padding.bottom} stroke={COLORS.border} strokeWidth="0.3" strokeOpacity="0.5" />
+        ))}
+
+        {/* Main grid */}
+        {heightTicks.map((h) => (
+          <g key={`h-${h}`}>
+            <line x1={padding.left} y1={toY(h)} x2={width - padding.right} y2={toY(h)} stroke={COLORS.border} strokeWidth="0.8" />
+            <text x={padding.left - 8} y={toY(h) + 4} fill={COLORS.textMuted} fontSize="11" textAnchor="end">{h}</text>
+          </g>
+        ))}
+        {ageTicks.map((a) => (
+          <g key={`a-${a}`}>
+            <line x1={toX(a)} y1={padding.top} x2={toX(a)} y2={height - padding.bottom} stroke={COLORS.border} strokeWidth="0.8" />
+            <text x={toX(a)} y={height - padding.bottom + 20} fill={COLORS.textMuted} fontSize="11" textAnchor="middle">{a}</text>
+          </g>
+        ))}
+
+        {/* Axis labels */}
+        <text x={padding.left - 30} y={height / 2} fill={COLORS.textSecondary} fontSize="12" textAnchor="middle" transform={`rotate(-90, ${padding.left - 30}, ${height / 2})`}>키 (cm)</text>
+        <text x={width / 2} y={height - 5} fill={COLORS.textSecondary} fontSize="12" textAnchor="middle">나이</text>
+
+        {/* Growth band (area between p3 and p97) */}
+        <path
+          d={`${createSmoothPath(p3)} L ${toX(19)} ${toY(p97[p97.length - 1].height)} ${p97.slice().reverse().map((p) => `L ${toX(p.age)} ${toY(p.height)}`).join(' ')} Z`}
+          fill="url(#bandGradient)"
+        />
+
+        {/* Percentile curves */}
+        <path d={createSmoothPath(p3)} fill="none" stroke="#64748b" strokeWidth="1.5" strokeDasharray="6,4" opacity="0.7" />
+        <path d={createSmoothPath(p50)} fill="none" stroke={COLORS.accentYellow} strokeWidth="2.5" />
+        <path d={createSmoothPath(p97)} fill="none" stroke="#64748b" strokeWidth="1.5" strokeDasharray="6,4" opacity="0.7" />
+
+        {/* Predicted trajectory */}
+        <line
+          x1={toX(currentAge)} y1={toY(currentHeight)}
+          x2={toX(18)} y2={toY(predictedHeight)}
+          stroke={COLORS.accent} strokeWidth="2" strokeDasharray="8,4" opacity="0.6"
+        />
+
+        {/* Historical data points */}
+        {historyData.slice(0, -1).map((point, i) => (
+          <g key={`hist-${i}`}>
+            <circle cx={toX(point.age)} cy={toY(point.height)} r="4" fill="#94a3b8" stroke="#ffffff" strokeWidth="1.5" />
+          </g>
+        ))}
+
+        {/* Current position (blue) */}
+        <circle cx={toX(currentAge)} cy={toY(currentHeight)} r="8" fill={COLORS.accent} stroke="#ffffff" strokeWidth="2" />
+
+        {/* Bone age position (orange) */}
+        <circle cx={toX(boneAge)} cy={toY(currentHeight)} r="6" fill={COLORS.accentOrange} stroke="#ffffff" strokeWidth="2" />
+
+        {/* Predicted adult height (green) */}
+        <circle cx={toX(18)} cy={toY(predictedHeight)} r="8" fill={COLORS.accentGreen} stroke="#ffffff" strokeWidth="2" />
       </svg>
     </div>
   );
@@ -250,9 +349,12 @@ export default function DoctorDashboard() {
               <InteractiveSlider label="최종 예측 키" value={predictedHeight} min={140} max={240} percentile={predictedHeightPercentile} color={COLORS.accentYellow} tooltip="종합 최종 예측" />
             </>
           ) : (
-            <div className="h-80 rounded-lg p-4" style={{ backgroundColor: COLORS.backgroundSecondary }}>
-              <GrowthChart currentAge={chronologicalAge} currentHeight={currentHeight} boneAge={boneAge} predictedHeight={predictedHeight} />
-              <div className="flex justify-center gap-6 mt-2">
+            <div className="rounded-lg p-4 overflow-hidden" style={{ backgroundColor: COLORS.backgroundSecondary }}>
+              <div className="h-72">
+                <GrowthChart currentAge={chronologicalAge} currentHeight={currentHeight} boneAge={boneAge} predictedHeight={predictedHeight} />
+              </div>
+              <div className="flex justify-center gap-4 mt-4 flex-wrap">
+                <div className="flex items-center gap-2 text-xs"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: "#94a3b8" }} /><span style={{ color: COLORS.textMuted }}>과거 기록</span></div>
                 <div className="flex items-center gap-2 text-xs"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS.accent }} /><span style={{ color: COLORS.textMuted }}>현재 위치</span></div>
                 <div className="flex items-center gap-2 text-xs"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS.accentOrange }} /><span style={{ color: COLORS.textMuted }}>뼈 나이 기준</span></div>
                 <div className="flex items-center gap-2 text-xs"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS.accentGreen }} /><span style={{ color: COLORS.textMuted }}>예측 성인키</span></div>
